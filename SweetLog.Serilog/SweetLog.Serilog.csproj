@@ -6,4 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+     <ProjectReference Include="../../sweetlib-collections/src/SweetLib.Collections/SweetLib.Collections.csproj" />
+  </ItemGroup>
+
 </Project>
