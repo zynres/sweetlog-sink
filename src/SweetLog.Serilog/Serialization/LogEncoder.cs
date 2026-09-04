@@ -78,10 +78,8 @@ public class LogEncoder
         return preparedLog;
     }
 
-    public int Encode(in PreparedLog preparedLog, Span<byte> destination)
+    public int Encode(in PreparedLog preparedLog, Span<byte> destination, ref int position)
     {
-        int position = 0;
-
         BinaryPrimitives.WriteInt64LittleEndian(
             destination[position..], preparedLog.Timestamp);
 
