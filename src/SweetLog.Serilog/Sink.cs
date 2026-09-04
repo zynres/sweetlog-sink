@@ -8,17 +8,36 @@ namespace SweetLog.Serilog;
 
 public class Sink : ILogEventSink
 {
-    private readonly BatchBuffer buffer = new();
+    private readonly BatchBuffer buffer;
     private readonly LogEncoder encoder = new();
+
+    public Sink(BatchBuffer buffer)
+    {
+        this.buffer = buffer;
+    }
 
     public void Emit(LogEvent logEvent)
     {
         PreparedLog preparedLog = encoder.GetPreparedLog(logEvent);
 
-        Span<byte> logBuffer = stackalloc byte[preparedLog.Size];
+        if (preparedLog.Size + buffer.Batch.Length > buffer.Batch.Capacity)
+        {
+            buffer.Write();
 
-        int written = encoder.Encode(in preparedLog, logBuffer);
+            if (preparedLog.Size > buffer.Batch.Capacity)
+            {
+                buffer.ResizeBatch(preparedLog.Size);
+            }
+        }
 
-        buffer.Write(logBuffer, written);
+        Span<byte> logBuffer = buffer.Batch.AsWritableSpan();
+
+        int position = (int)buffer.Batch.Length;
+
+        encoder.Encode(in preparedLog, logBuffer, ref position);
+
+        buffer.Batch.Length += (uint)(position - buffer.Batch.Length);
+
+        buffer.batchHeaders.LogsCount++;
     }
 }
