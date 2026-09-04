@@ -2,7 +2,7 @@ namespace SweetLog.Serilog.Batching;
 
 public struct LogBatch
 {
-    public long Id;
+    public uint Id;
 
     public long Timestamp;
     public int LogsCount;
