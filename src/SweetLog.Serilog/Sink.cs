@@ -8,11 +8,14 @@ namespace SweetLog.Serilog;
 
 public class Sink : ILogEventSink
 {
-    private readonly BatchBuffer buffer;
     private readonly LogEncoder encoder = new();
+    
+    private readonly SinkOptions options;
+    private readonly BatchBuffer buffer;
 
-    public Sink(BatchBuffer buffer)
+    public Sink(BatchBuffer buffer, SinkOptions options)
     {
+        this.options = options;
         this.buffer = buffer;
     }
 
