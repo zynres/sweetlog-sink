@@ -9,15 +9,17 @@ namespace SweetLog.Serilog.Buffer;
 
 public unsafe sealed class BatchBuffer : IDisposable
 {
+    private readonly SinkOptions options;
+
     public UnsafeConcurrentQueue<UnsafeArray<byte>> Queue;
 
     public UnsafeList<byte> Batch;
     public LogBatch batchHeaders;
 
-    public BatchBuffer()
+    public BatchBuffer(SinkOptions options)
     {
-        Queue = new UnsafeConcurrentQueue<UnsafeArray<byte>>(96);
-        Batch = new UnsafeList<byte>(1 * 1024 * 1024);
+        Queue = new UnsafeConcurrentQueue<UnsafeArray<byte>>(options.QueueCapacity);
+        Batch = new UnsafeList<byte>(options.BatchSize);
         batchHeaders = new();
 
         InitBatch();
@@ -71,7 +73,7 @@ public unsafe sealed class BatchBuffer : IDisposable
 
             return memoryManager.Memory;
         }
-        else
+        else if (Batch.Length > 0)
         {
             var buffer = new UnsafeArray<byte>(Batch.Length);
 
@@ -83,6 +85,8 @@ public unsafe sealed class BatchBuffer : IDisposable
 
             return memoryManager.Memory;
         }
+
+        return null;
     }
 
     public void DeleteSaved(uint index)
