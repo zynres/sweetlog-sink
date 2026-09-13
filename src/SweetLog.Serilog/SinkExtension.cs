@@ -18,7 +18,6 @@ public static class SinkExtension
         services.AddSingleton(options);
         services.AddSingleton<BatchBuffer>();
 
-        //services.AddHostedService<HeartbeatWorker>();
         services.AddHostedService<LogSenderWorker>();
     }
 
