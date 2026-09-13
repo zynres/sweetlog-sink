@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace SweetLog.Serilog.Common.Data;
 
-public struct PreparedLog
+public ref struct PreparedLog
 {
     public int Size;
 
