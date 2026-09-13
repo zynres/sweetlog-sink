@@ -4,9 +4,9 @@ using System.Buffers.Binary;
 using Serilog.Events;
 using System.Text;
 
-namespace SweetLog.Serilog.Serialization;
+namespace SweetLog.Serilog.Encoders;
 
-public class LogEncoder
+public sealed class LogEncoder
 {
     public PreparedLog GetPreparedLog(LogEvent logEvent)
     {
@@ -78,7 +78,7 @@ public class LogEncoder
         return preparedLog;
     }
 
-    public int Encode(in PreparedLog preparedLog, Span<byte> destination, ref int position)
+    public void Encode(in PreparedLog preparedLog, Span<byte> destination, ref int position)
     {
         BinaryPrimitives.WriteInt64LittleEndian(
             destination[position..], preparedLog.Timestamp);
@@ -162,8 +162,6 @@ public class LogEncoder
 
             position += property.ValueByteCount;
         }
-
-        return position;
     }
 
     private int GetScalarSize(ScalarValue scalar, out PropertyType type)
