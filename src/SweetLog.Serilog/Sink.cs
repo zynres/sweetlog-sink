@@ -1,5 +1,5 @@
-using SweetLog.Serilog.Serialization;
 using SweetLog.Serilog.Common.Data;
+using SweetLog.Serilog.Encoders;
 using SweetLog.Serilog.Buffer;
 using Serilog.Events;
 using Serilog.Core;
@@ -9,7 +9,7 @@ namespace SweetLog.Serilog;
 public class Sink : ILogEventSink
 {
     private readonly LogEncoder encoder = new();
-    
+        
     private readonly SinkOptions options;
     private readonly BatchBuffer buffer;
 
