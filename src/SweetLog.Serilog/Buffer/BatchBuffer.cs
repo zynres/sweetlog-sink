@@ -1,9 +1,9 @@
 using SweetLib.Collections.Unsafe.Concurrent.Queue;
 using SweetLib.Collections.Unsafe.Array;
 using SweetLib.Collections.Unsafe.List;
+using SweetLib.Collections.Unsafe;
 using SweetLog.Serilog.Batching;
 using System.Buffers.Binary;
-using SweetLib.Collections.Unsafe;
 
 namespace SweetLog.Serilog.Buffer;
 
@@ -13,12 +13,17 @@ public unsafe sealed class BatchBuffer : IDisposable
 
     public UnsafeConcurrentQueue<UnsafeArray<byte>> Queue;
 
+    public UnsafeList<byte> Heartbeat;
+
     public UnsafeList<byte> Batch;
     public LogBatch batchHeaders;
 
     public BatchBuffer(SinkOptions options)
     {
         Queue = new UnsafeConcurrentQueue<UnsafeArray<byte>>(options.QueueCapacity);
+
+        Heartbeat = new UnsafeList<byte>(1 + 8); // 1 messageType, 8 timestamp
+
         Batch = new UnsafeList<byte>(options.BatchSize);
         batchHeaders = new();
 
@@ -51,13 +56,13 @@ public unsafe sealed class BatchBuffer : IDisposable
         batchHeaders.Id = Queue.Write;
         batchHeaders.Timestamp = DateTime.UtcNow.Ticks;
 
-        BinaryPrimitives.WriteInt64LittleEndian(
+        BinaryPrimitives.WriteUInt32LittleEndian(
             batch, batchHeaders.Id);
 
         BinaryPrimitives.WriteInt64LittleEndian(
             batch[4..], batchHeaders.Timestamp);
 
-        BinaryPrimitives.WriteInt64LittleEndian(
+        BinaryPrimitives.WriteInt32LittleEndian(
             batch[12..], batchHeaders.LogsCount);
 
         Batch.CopyTo(buffer);
@@ -123,6 +128,7 @@ public unsafe sealed class BatchBuffer : IDisposable
 
     public void Dispose()
     {
+        Heartbeat.Dispose();
         Batch.Dispose();
 
         for (uint i = 0; i < Queue.Data->Length; i++)
