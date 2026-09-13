@@ -1,16 +1,21 @@
-using System.Net.WebSockets;
 using Microsoft.Extensions.Hosting;
+using SweetLog.Serilog.Encoders;
 using SweetLog.Serilog.Buffer;
+using System.Net.WebSockets;
 
 namespace SweetLog.Serilog.Workers;
 
 public class LogSenderWorker : BackgroundService
 {
+    private readonly HeartbeatEncoder encoder;
+
     private readonly SinkOptions options;
     private readonly BatchBuffer buffer;
 
     public LogSenderWorker(BatchBuffer buffer, SinkOptions options)
     {
+        encoder = new();
+
         this.options = options;
         this.buffer = buffer;
     }
@@ -23,7 +28,7 @@ public class LogSenderWorker : BackgroundService
 
         while (!token.IsCancellationRequested)
         {
-            await Task.Delay(options.FlushInterval);
+            await Task.Delay(options.FlushInterval, token);
 
             ReadOnlyMemory<byte> batch = buffer.Read();
 
