@@ -1,4 +1,4 @@
-using SweetLib.Collections.Unsafe.Queue;
+using SweetLib.Collections.Unsafe.Concurrent.Queue;
 using SweetLib.Collections.Unsafe.Array;
 using SweetLib.Collections.Unsafe.List;
 using SweetLog.Serilog.Common.Enums;
@@ -14,7 +14,7 @@ public unsafe sealed class BatchBuffer : IDisposable
     private readonly SinkOptions options;
     private readonly HeartbeatEncoder heartEncoder;
 
-    public UnsafeQueue<UnsafeArray<byte>> Queue;
+    public UnsafeConcurrentQueue<UnsafeArray<byte>> Queue;
 
     public UnsafeArray<byte> Heartbeat;
 
@@ -23,7 +23,7 @@ public unsafe sealed class BatchBuffer : IDisposable
 
     public BatchBuffer(SinkOptions options)
     {
-        Queue = new UnsafeQueue<UnsafeArray<byte>>(options.QueueCapacity);
+        Queue = new UnsafeConcurrentQueue<UnsafeArray<byte>>(options.QueueCapacity);
 
         heartEncoder = new HeartbeatEncoder();
         Heartbeat = new UnsafeArray<byte>(1 + 8); // 1 messageType, 8 timestamp
