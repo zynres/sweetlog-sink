@@ -47,7 +47,7 @@ public class LogSenderWorker : BackgroundService
                 Console.WriteLine("Client connected");
 
                 _ = ReceiveLoop(client, token);
-                _ = SendingLoop(client, flushTask, heartbeatTask, token);
+                await SendingLoop(client, flushTask, heartbeatTask, token);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
