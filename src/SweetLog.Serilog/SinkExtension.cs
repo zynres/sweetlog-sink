@@ -14,8 +14,8 @@ public static class SinkExtension
 
         configure?.Invoke(options);
 
-        services.AddSingleton<Sink>();
         services.AddSingleton(options);
+        services.AddSingleton<Sink>();
         services.AddSingleton<BatchBuffer>();
 
         services.AddHostedService<LogSenderWorker>();
