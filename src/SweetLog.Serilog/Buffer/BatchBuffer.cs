@@ -1,7 +1,9 @@
-using SweetLib.Collections.Unsafe.Concurrent.Queue;
+using SweetLib.Collections.Unsafe.Queue;
 using SweetLib.Collections.Unsafe.Array;
 using SweetLib.Collections.Unsafe.List;
+using SweetLog.Serilog.Common.Enums;
 using SweetLib.Collections.Unsafe;
+using SweetLog.Serilog.Encoders;
 using SweetLog.Serilog.Batching;
 using System.Buffers.Binary;
 
@@ -10,19 +12,21 @@ namespace SweetLog.Serilog.Buffer;
 public unsafe sealed class BatchBuffer : IDisposable
 {
     private readonly SinkOptions options;
+    private readonly HeartbeatEncoder heartEncoder;
 
-    public UnsafeConcurrentQueue<UnsafeArray<byte>> Queue;
+    public UnsafeQueue<UnsafeArray<byte>> Queue;
 
-    public UnsafeList<byte> Heartbeat;
+    public UnsafeArray<byte> Heartbeat;
 
     public UnsafeList<byte> Batch;
     public LogBatch batchHeaders;
 
     public BatchBuffer(SinkOptions options)
     {
-        Queue = new UnsafeConcurrentQueue<UnsafeArray<byte>>(options.QueueCapacity);
+        Queue = new UnsafeQueue<UnsafeArray<byte>>(options.QueueCapacity);
 
-        Heartbeat = new UnsafeList<byte>(1 + 8); // 1 messageType, 8 timestamp
+        heartEncoder = new HeartbeatEncoder();
+        Heartbeat = new UnsafeArray<byte>(1 + 8); // 1 messageType, 8 timestamp
 
         Batch = new UnsafeList<byte>(options.BatchSize);
         batchHeaders = new();
@@ -39,38 +43,39 @@ public unsafe sealed class BatchBuffer : IDisposable
         InitBatch();
     }
 
-    public void Write()
+    public void WriteBatch()
     {
         var buffer = new UnsafeArray<byte>(Batch.Length);
 
         HardWrite(&buffer);
 
         Queue.Enqueue(in buffer);
-
     }
 
     private void HardWrite(UnsafeArray<byte>* buffer)
     {
         Span<byte> batch = Batch.AsSpan();
 
-        batchHeaders.Id = Queue.Write;
+        batchHeaders.QueueIndex = Queue.Write;
         batchHeaders.Timestamp = DateTime.UtcNow.Ticks;
 
+        batch[0] = (byte)MessageType.LogBatch;
+
         BinaryPrimitives.WriteUInt32LittleEndian(
-            batch, batchHeaders.Id);
+            batch[1..], batchHeaders.QueueIndex);
 
         BinaryPrimitives.WriteInt64LittleEndian(
-            batch[4..], batchHeaders.Timestamp);
+            batch[5..], batchHeaders.Timestamp);
 
         BinaryPrimitives.WriteInt32LittleEndian(
-            batch[12..], batchHeaders.LogsCount);
+            batch[13..], batchHeaders.LogsCount);
 
         Batch.CopyTo(buffer);
 
         InitBatch();
     }
 
-    public Memory<byte> Read()
+    public Memory<byte> ReadBatch()
     {
         if (Queue.TryInQueue(out UnsafeArray<byte> value))
         {
@@ -78,20 +83,40 @@ public unsafe sealed class BatchBuffer : IDisposable
 
             return memoryManager.Memory;
         }
-        else if (Batch.Length > 0)
+        else if (Batch.Length > 16)
         {
             var buffer = new UnsafeArray<byte>(Batch.Length);
 
             HardWrite(&buffer);
 
-            var memoryManager = new UnmanagedMemoryManager<byte>(buffer.Data, (int)buffer.Length);
-
             Queue.Enqueue(buffer);
 
-            return memoryManager.Memory;
+            if (Queue.TryInQueue(out UnsafeArray<byte> bytes))
+            {
+                var memoryManager = new UnmanagedMemoryManager<byte>(bytes.Data, (int)bytes.Length);
+
+                return memoryManager.Memory;
+            }
+
+            return null;
         }
 
         return null;
+    }
+
+    public Memory<byte> BeatHeart()
+    {
+        var prepared = heartEncoder.GetPreparedHeartbeat();
+
+        int position = 0;
+
+        heartEncoder.Encode(in prepared, Heartbeat.AsSpan(), ref position);
+
+        unsafe
+        {
+            return new UnmanagedMemoryManager<byte>(
+                Heartbeat.Data, (int)Heartbeat.Length).Memory;
+        }
     }
 
     public void DeleteSaved(uint index)
@@ -113,12 +138,14 @@ public unsafe sealed class BatchBuffer : IDisposable
                 i = 0;
         }
 
-        Queue.SetReadLength(index, count);
+        Queue.Read = index;
+        Queue.Length -= count;
     }
 
     private void InitBatch()
     {
-        Batch.Length += 4 // Id
+        Batch.Length = 1  // messageType 
+                      + 4 // id
                       + 8 // timestamp
                       + 4 // LogsCount
         ;
@@ -132,7 +159,10 @@ public unsafe sealed class BatchBuffer : IDisposable
         Batch.Dispose();
 
         for (uint i = 0; i < Queue.Data->Length; i++)
-            Queue.Data[i].Dispose();
+        {
+            uint index = (Queue.Read + i) % Queue.Capacity;
+            Queue.Data[index].Dispose();
+        }
 
         Queue.Dispose();
     }
