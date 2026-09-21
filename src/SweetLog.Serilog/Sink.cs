@@ -9,7 +9,7 @@ namespace SweetLog.Serilog;
 public class Sink : ILogEventSink
 {
     private readonly LogEncoder encoder = new();
-        
+
     private readonly SinkOptions options;
     private readonly BatchBuffer buffer;
 
@@ -21,11 +21,13 @@ public class Sink : ILogEventSink
 
     public void Emit(LogEvent logEvent)
     {
+        Console.WriteLine(logEvent.MessageTemplate.Render(logEvent.Properties));
+
         PreparedLog preparedLog = encoder.GetPreparedLog(logEvent);
 
         if (preparedLog.Size + buffer.Batch.Length > buffer.Batch.Capacity)
         {
-            buffer.Write();
+            buffer.WriteBatch();
 
             if (preparedLog.Size > buffer.Batch.Capacity)
             {
@@ -42,5 +44,7 @@ public class Sink : ILogEventSink
         buffer.Batch.Length += (uint)(position - buffer.Batch.Length);
 
         buffer.batchHeaders.LogsCount++;
+
+        Console.WriteLine($"log writed in batch logs count: {buffer.batchHeaders.LogsCount} and batch length: {buffer.Batch.Length}");
     }
 }
