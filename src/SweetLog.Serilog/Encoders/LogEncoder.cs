@@ -35,10 +35,8 @@ public sealed class LogEncoder
             if (property.Value is not ScalarValue value)
                 continue;
 
-            PropertyType type = PropertyType.Null;
-
             int nameByteCount = Encoding.UTF8.GetByteCount(property.Key);
-            int valueByteCount = GetScalarSize(value, out type);
+            int valueByteCount = GetScalarSize(value, out var type);
 
             PreparedProperty preparedProperty = new()
             {
