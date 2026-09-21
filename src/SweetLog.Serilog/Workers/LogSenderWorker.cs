@@ -46,40 +46,8 @@ public class LogSenderWorker : BackgroundService
 
                 Console.WriteLine("Client connected");
 
-                while (!token.IsCancellationRequested && client.State == WebSocketState.Open)
-                {
-                    var completed = await Task.WhenAny(flushTask, heartbeatTask);
-
-                    if (completed == flushTask)
-                    {
-                        ReadOnlyMemory<byte> batchMemory = buffer.ReadBatch();
-
-                        if (batchMemory.Length == 0)
-                            continue;
-
-                        await client.SendAsync(
-                            batchMemory, WebSocketMessageType.Binary, true, token);
-
-                        Console.WriteLine($"bytes sended: {batchMemory.Length}");
-
-                        flushTask = Task.Delay(options.FlushInterval, token);
-                    }
-                    else if (completed == heartbeatTask)
-                    {
-                        ReadOnlyMemory<byte> heartbeatMemory = buffer.BeatHeart();
-
-                        await client.SendAsync(
-                            heartbeatMemory, WebSocketMessageType.Binary, true, token);
-
-                        await ReceiveHearbeatResponse(client, token);
-
-                        buffer.DeleteSaved(
-                            BinaryPrimitives.ReadUInt32LittleEndian(
-                                receivingBuffer.AsSpan()));
-
-                        heartbeatTask = Task.Delay(options.HeartbeatInterval, token);
-                    }
-                }
+                _ = ReceiveLoop(client, token);
+                _ = SendingLoop(client, flushTask, heartbeatTask, token);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
@@ -100,18 +68,54 @@ public class LogSenderWorker : BackgroundService
         }
     }
 
-    private async Task ReceiveHearbeatResponse(ClientWebSocket client, CancellationToken token)
+    private async Task SendingLoop(ClientWebSocket client, Task flushTask, Task heartbeatTask, CancellationToken token)
     {
-        bool endOfReceivedMessage = false;
+        while (!token.IsCancellationRequested && client.State == WebSocketState.Open)
+        {
+            var completed = await Task.WhenAny(flushTask, heartbeatTask);
 
-        while (endOfReceivedMessage)
+            if (completed == flushTask)
+            {
+                ReadOnlyMemory<byte> batchMemory = buffer.ReadBatch();
+
+                if (batchMemory.Length == 0)
+                    continue;
+
+                await client.SendAsync(
+                    batchMemory, WebSocketMessageType.Binary, true, token);
+
+                Console.WriteLine($"bytes sended: {batchMemory.Length}");
+
+                flushTask = Task.Delay(options.FlushInterval, token);
+            }
+            else if (completed == heartbeatTask)
+            {
+                ReadOnlyMemory<byte> heartbeatMemory = buffer.BeatHeart();
+
+                await client.SendAsync(
+                    heartbeatMemory, WebSocketMessageType.Binary, true, token);
+
+                heartbeatTask = Task.Delay(options.HeartbeatInterval, token);
+            }
+        }
+
+    }
+
+    private async Task ReceiveLoop(ClientWebSocket client, CancellationToken token)
+    {
+        while (!token.IsCancellationRequested && client.State == WebSocketState.Open)
         {
             var result = await client.ReceiveAsync(
                 receivingMemory[(int)receivingBuffer.Length..], token);
 
             receivingBuffer.Length += (uint)result.Count;
 
-            endOfReceivedMessage = result.EndOfMessage;
+            if (result.EndOfMessage)
+            {
+                buffer.DeleteSaved(
+                    BinaryPrimitives.ReadUInt32LittleEndian(
+                        receivingBuffer.AsSpan()));
+            }
         }
     }
 }
