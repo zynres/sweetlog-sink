@@ -37,7 +37,7 @@ public class Sink : ILogEventSink
 
         Span<byte> logBuffer = buffer.Batch.AsWritableSpan();
 
-        int position = (int)buffer.Batch.Length;
+        int position = 0; //(int)buffer.Batch.Length;
 
         encoder.Encode(in preparedLog, logBuffer, ref position);
 
