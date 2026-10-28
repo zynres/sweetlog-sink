@@ -21,16 +21,17 @@ public class Sink : ILogEventSink
 
     public void Emit(LogEvent logEvent)
     {
-        Console.WriteLine(logEvent.MessageTemplate.Render(logEvent.Properties));
-
         PreparedLog preparedLog = encoder.GetPreparedLog(logEvent);
 
         if (preparedLog.Size + buffer.Batch.Length > buffer.Batch.Capacity)
         {
             buffer.WriteBatch();
 
+            Console.WriteLine("Checking size emit");
+
             if (preparedLog.Size > buffer.Batch.Capacity)
             {
+                Console.WriteLine("ResizeBatch emit");
                 buffer.ResizeBatch(preparedLog.Size);
             }
         }
@@ -39,7 +40,29 @@ public class Sink : ILogEventSink
 
         int position = 0;
 
-        encoder.Encode(in preparedLog, logBuffer, ref position);
+        Console.WriteLine("Start encoding emit");
+
+        Console.WriteLine(
+            @$"
+                Destination length: {logBuffer.Length},
+                position: {position},
+                prepared size: {preparedLog.Size}, 
+                batch capacity: {buffer.Batch.Capacity},
+                batch length: {buffer.Batch.Length},
+                TraceId: {preparedLog.TraceId?.ToHexString() ?? "null"},
+                SpanId: {preparedLog.SpanId?.ToHexString() ?? "null"}");
+
+        try
+        {
+            encoder.Encode(in preparedLog, logBuffer, ref position);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception from encoding: {ex}");
+            throw;
+        }
+
+        Console.WriteLine("End encoding emit");
 
         buffer.Batch.Length += (uint)position;
 
