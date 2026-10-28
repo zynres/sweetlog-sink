@@ -148,6 +148,8 @@ public unsafe sealed class BatchBuffer : IDisposable
                 i = 0;
         }
 
+        Console.WriteLine($"Deleted Count: {count}");
+
         Queue.Read = index;
         Queue.Length -= count;
     }
