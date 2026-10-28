@@ -23,9 +23,6 @@ public class LogSenderWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken token)
     {
-        var flushTask = Task.Delay(options.FlushInterval, token);
-        var heartbeatTask = Task.Delay(options.HeartbeatInterval, token);
-
         receivingBuffer = new UnsafeList<byte>(4); // Queue Index
 
         unsafe
@@ -33,6 +30,8 @@ public class LogSenderWorker : BackgroundService
             receivingMemory = new UnmanagedMemoryManager<byte>(
                 receivingBuffer.Data, (int)receivingBuffer.Capacity).Memory;
         }
+
+        bool connected = false;
 
         while (!token.IsCancellationRequested)
         {
@@ -44,10 +43,12 @@ public class LogSenderWorker : BackgroundService
                     new Uri(options.Uri.AbsoluteUri + "ws"),
                     token);
 
+                connected = true;
+
                 Console.WriteLine("Client connected");
 
-                _ = ReceiveLoop(client, token);
-                await SendingLoop(client, flushTask, heartbeatTask, token);
+                _ = SendingLoop(client, token);
+                await ReceiveLoop(client, token);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
@@ -63,42 +64,65 @@ public class LogSenderWorker : BackgroundService
             }
             finally
             {
-                await client.CloseAsync(WebSocketCloseStatus.NormalClosure, "Application closing", CancellationToken.None);
+                if (connected && client.State == WebSocketState.Open ||
+                    client.State == WebSocketState.CloseReceived)
+                {
+                    await client.CloseAsync(
+                        WebSocketCloseStatus.NormalClosure,
+                        "Application closing",
+                        CancellationToken.None);
+
+                    connected = false;
+                }
             }
         }
     }
 
-    private async Task SendingLoop(ClientWebSocket client, Task flushTask, Task heartbeatTask, CancellationToken token)
+    private async Task SendingLoop(ClientWebSocket client, CancellationToken token)
     {
-        while (!token.IsCancellationRequested && client.State == WebSocketState.Open)
-        {
-            var completed = await Task.WhenAny(flushTask, heartbeatTask);
+        Task flushLoop = FlushLoopAsync(client, token);
+        Task heartbeatLoop = HeartbeatLoopAsync(client, token);
 
-            if (completed == flushTask)
+        await Task.WhenAll(flushLoop, heartbeatLoop);
+    }
+
+    private async Task FlushLoopAsync(ClientWebSocket client, CancellationToken token)
+    {
+        using var timer = new PeriodicTimer(options.FlushInterval);
+
+        try
+        {
+            while (await timer.WaitForNextTickAsync(token) && client.State == WebSocketState.Open)
             {
                 ReadOnlyMemory<byte> batchMemory = buffer.ReadBatch();
 
-                if (batchMemory.Length == 0)
+                if (batchMemory.Length <= 17)
                     continue;
 
-                await client.SendAsync(
-                    batchMemory, WebSocketMessageType.Binary, true, token);
+                await client.SendAsync(batchMemory, WebSocketMessageType.Binary, true, token);
 
                 Console.WriteLine($"bytes sended: {batchMemory.Length}");
-
-                flushTask = Task.Delay(options.FlushInterval, token);
             }
-            else if (completed == heartbeatTask)
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task HeartbeatLoopAsync(ClientWebSocket client, CancellationToken token)
+    {
+        using var timer = new PeriodicTimer(options.HeartbeatInterval);
+
+        try
+        {
+            while (await timer.WaitForNextTickAsync(token) && client.State == WebSocketState.Open)
             {
                 ReadOnlyMemory<byte> heartbeatMemory = buffer.BeatHeart();
 
-                await client.SendAsync(
-                    heartbeatMemory, WebSocketMessageType.Binary, true, token);
+                await client.SendAsync(heartbeatMemory, WebSocketMessageType.Binary, true, token);
 
-                heartbeatTask = Task.Delay(options.HeartbeatInterval, token);
+                Console.WriteLine("heartbeat sended");
             }
         }
-
+        catch (OperationCanceledException) { }
     }
 
     private async Task ReceiveLoop(ClientWebSocket client, CancellationToken token)
@@ -112,9 +136,14 @@ public class LogSenderWorker : BackgroundService
 
             if (result.EndOfMessage)
             {
-                buffer.DeleteSaved(
-                    BinaryPrimitives.ReadUInt32LittleEndian(
-                        receivingBuffer.AsSpan()));
+                uint queueIndex = BinaryPrimitives.ReadUInt32LittleEndian(
+                        receivingBuffer.AsSpan());
+
+                Console.WriteLine($"receive heartbeat delete batches to index: {queueIndex}");
+
+                buffer.DeleteSaved(queueIndex);
+
+                receivingBuffer.Length = 0;
             }
         }
     }
