@@ -52,6 +52,5 @@ git checkout -b feat/your-feature-name
 ```bash
 git push origin feat/your-feature-name
 ```
-git push origin feat/your-feature-name
-```
 #### 5. Open a Pull Request
+* From github
