@@ -1,1 +1,1 @@
-Slink: for SweetLog
+Sink: for SweetLog
