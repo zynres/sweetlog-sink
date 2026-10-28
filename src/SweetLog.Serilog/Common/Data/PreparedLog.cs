@@ -19,7 +19,7 @@ public ref struct PreparedLog
     public int ExceptionByteCount;
     public string? Exception;
 
-    public int PropertiesCount;
+    public uint PropertiesCount;
 
     public PreparedProperty[] Properties;
 }
