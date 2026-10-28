@@ -5,6 +5,6 @@ public struct LogBatch
     public uint QueueIndex;
 
     public long Timestamp;
-    public int LogsCount;
+    public uint LogsCount;
 
 }
