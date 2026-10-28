@@ -11,8 +11,8 @@ namespace SweetLog.Serilog.Buffer;
 
 public unsafe sealed class BatchBuffer : IDisposable
 {
-    private readonly SinkOptions options;
     private readonly HeartbeatEncoder heartEncoder;
+    private readonly SinkOptions options;
 
     public UnsafeConcurrentQueue<UnsafeArray<byte>> Queue;
 
@@ -45,11 +45,13 @@ public unsafe sealed class BatchBuffer : IDisposable
 
     public void WriteBatch()
     {
+        Console.WriteLine($"Create buffer for sending: {Batch.Length}");
+
         var buffer = new UnsafeArray<byte>(Batch.Length);
 
         HardWrite(&buffer);
 
-        Queue.Enqueue(in buffer);
+        Queue.Enqueue(buffer);
     }
 
     private void HardWrite(UnsafeArray<byte>* buffer)
@@ -59,16 +61,24 @@ public unsafe sealed class BatchBuffer : IDisposable
         batchHeaders.QueueIndex = Queue.Write;
         batchHeaders.Timestamp = DateTime.UtcNow.Ticks;
 
-        batch[0] = (byte)MessageType.LogBatch;
+        int position = 0;
+
+        batch[position] = (byte)MessageType.LogBatch;
+
+        position++;
 
         BinaryPrimitives.WriteUInt32LittleEndian(
-            batch[1..], batchHeaders.QueueIndex);
+            batch[position..], batchHeaders.QueueIndex);
+
+        position += 4;
 
         BinaryPrimitives.WriteInt64LittleEndian(
-            batch[5..], batchHeaders.Timestamp);
+            batch[position..], batchHeaders.Timestamp);
 
-        BinaryPrimitives.WriteInt32LittleEndian(
-            batch[13..], batchHeaders.LogsCount);
+        position += 8;
+
+        BinaryPrimitives.WriteUInt32LittleEndian(
+            batch[position..], batchHeaders.LogsCount);
 
         Batch.CopyTo(buffer);
 
@@ -83,7 +93,7 @@ public unsafe sealed class BatchBuffer : IDisposable
 
             return memoryManager.Memory;
         }
-        else if (Batch.Length > 16)
+        else if (Batch.Length > 17)
         {
             var buffer = new UnsafeArray<byte>(Batch.Length);
 
