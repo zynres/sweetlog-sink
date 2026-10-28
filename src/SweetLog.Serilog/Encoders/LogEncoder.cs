@@ -26,7 +26,7 @@ public sealed class LogEncoder
             Properties = new PreparedProperty[logEvent.Properties.Count]
         };
 
-        int index = 0;
+        uint index = 0;
 
         int propertiesByteCount = 0;
 
@@ -83,17 +83,33 @@ public sealed class LogEncoder
 
         position += 8;
 
-        if (preparedLog.TraceId == null)
-            destination.Slice(position, 16).Clear();
+        if (preparedLog.TraceId is { } traceId)
+        {
+            Convert.FromHexString(
+                traceId.ToHexString(),
+                destination.Slice(position, 16),
+                out _,
+                out _);
+        }
         else
-            preparedLog.TraceId.Value.CopyTo(destination[position..]);
+        {
+            destination.Slice(position, 16).Clear();
+        }
 
         position += 16;
 
-        if (preparedLog.SpanId == null)
-            destination.Slice(position, 8).Clear();
+        if (preparedLog.SpanId is { } spanId)
+        {
+            Convert.FromHexString(
+                spanId.ToHexString(),
+                destination.Slice(position, 8),
+                out _,
+                out _);
+        }
         else
-            preparedLog.SpanId.Value.CopyTo(destination[position..]);
+        {
+            destination.Slice(position, 8).Clear();
+        }
 
         position += 8;
 
@@ -125,7 +141,7 @@ public sealed class LogEncoder
             position += preparedLog.ExceptionByteCount;
         }
 
-        BinaryPrimitives.WriteInt32LittleEndian(
+        BinaryPrimitives.WriteUInt32LittleEndian(
             destination[position..], preparedLog.PropertiesCount);
 
         position += 4;
@@ -248,6 +264,18 @@ public sealed class LogEncoder
                     (ulong)scalar.Value!);
                 break;
 
+            case PropertyType.Double:
+                BinaryPrimitives.WriteDoubleLittleEndian(
+                    destination,
+                    (double)scalar.Value!);
+                break;
+
+            case PropertyType.Float:
+                BinaryPrimitives.WriteSingleLittleEndian(
+                    destination,
+                    (float)scalar.Value!);
+                break;
+
             case PropertyType.Boolean:
                 destination[0] = (bool)scalar.Value! ? (byte)1 : (byte)0;
                 break;
@@ -260,7 +288,8 @@ public sealed class LogEncoder
                 if (property.ValueByteCount > 0)
                     Encoding.UTF8.GetBytes((string)scalar.Value!, destination);
                 break;
-
+            case PropertyType.Null:
+                break;
             default:
                 throw new NotSupportedException(
                     $"Unsupported property type: {property.Type}");
