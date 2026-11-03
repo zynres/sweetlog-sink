@@ -19,7 +19,7 @@ public sealed class LogEncoder
             SpanId = logEvent.SpanId,
             Timestamp = logEvent.Timestamp.ToUnixTimeMilliseconds(),
             Level = (byte)logEvent.Level,
-            MessageByteCount = Encoding.UTF8.GetByteCount(message),
+            MessageByteCount = string.IsNullOrEmpty(exception) == true ? 0 : Encoding.UTF8.GetByteCount(message),
             Message = message,
             ExceptionByteCount = string.IsNullOrEmpty(exception) == true ? 0 : Encoding.UTF8.GetByteCount(exception),
             Exception = exception,
