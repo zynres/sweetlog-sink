@@ -1,9 +1,12 @@
+using SweetLib.Collections.Unsafe.Array;
 using SweetLib.Collections.Unsafe.List;
+using SweetLog.Serilog.Common.Enums;
 using Microsoft.Extensions.Hosting;
 using SweetLib.Collections.Unsafe;
 using SweetLog.Serilog.Buffer;
 using System.Buffers.Binary;
 using System.Net.WebSockets;
+using System.Text;
 
 namespace SweetLog.Serilog.Workers;
 
@@ -23,7 +26,7 @@ public class LogSenderWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken token)
     {
-        receivingBuffer = new UnsafeList<byte>(4); // Queue Index
+        receivingBuffer = new UnsafeList<byte>(5); // Queue Index
 
         unsafe
         {
@@ -101,7 +104,7 @@ public class LogSenderWorker : BackgroundService
 
                 await client.SendAsync(batchMemory, WebSocketMessageType.Binary, true, token);
 
-                Console.WriteLine($"bytes sended: {batchMemory.Length}");
+                Console.WriteLine($"Bytes Sended: {batchMemory.Length}");
             }
         }
         catch (OperationCanceledException) { }
@@ -119,10 +122,86 @@ public class LogSenderWorker : BackgroundService
 
                 await client.SendAsync(heartbeatMemory, WebSocketMessageType.Binary, true, token);
 
-                Console.WriteLine("heartbeat sended");
+                Console.WriteLine("Heartbeat Sended");
             }
         }
         catch (OperationCanceledException) { }
+    }
+
+    private async Task ConfigurationSendingAsync(ClientWebSocket client, CancellationToken token)
+    {
+        try
+        {
+            var configurationBuffer = new UnsafeArray<byte>(CalculateConfigurationSize(out int clientName, out int apiKey));
+
+            ConfigurationEncode(configurationBuffer.AsSpan(), clientName, apiKey);
+
+            ReadOnlyMemory<byte> configurationMemory;
+
+            unsafe
+            {
+                configurationMemory = new UnmanagedMemoryManager<byte>(
+                    configurationBuffer.Data, (int)configurationBuffer.Length).Memory;
+            }
+
+            await client.SendAsync(configurationMemory, WebSocketMessageType.Binary, true, token);
+
+            Console.WriteLine("Configuration Sended");
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private uint CalculateConfigurationSize(out int clientName, out int apiKey)
+    {
+        clientName = string.IsNullOrEmpty(options.ClientName) == true ? 0 : Encoding.UTF8.GetByteCount(options.ClientName);
+        apiKey = string.IsNullOrEmpty(options.ApiKey) == true ? 0 : Encoding.UTF8.GetByteCount(options.ApiKey);
+
+        int size = 1 + // MessageType
+                   4 + // clientNameByteCount
+                   clientName +
+                   4 + // apiKeyByteCount
+                   apiKey +
+                   4;          // batchSize
+
+        return (uint)size;
+    }
+
+    private void ConfigurationEncode(Span<byte> destination, int clientNameByteCount, int apiKeyByteCount)
+    {
+        int position = 0;
+
+        destination[position] = (byte)MessageType.AskConf;
+
+        position++;
+
+        BinaryPrimitives.WriteInt32LittleEndian(
+            destination[position..], clientNameByteCount);
+
+        position += 4;
+
+        if (clientNameByteCount > 0)
+        {
+            Encoding.UTF8.GetBytes(options.ClientName, destination[position..]);
+
+            position += clientNameByteCount;
+        }
+
+        BinaryPrimitives.WriteInt32LittleEndian(
+            destination[position..], apiKeyByteCount);
+
+        position += 4;
+
+        if (apiKeyByteCount > 0)
+        {
+            Encoding.UTF8.GetBytes(options.ApiKey, destination[position..]);
+
+            position += apiKeyByteCount;
+        }
+
+        BinaryPrimitives.WriteUInt32LittleEndian(
+            destination[position..], options.BatchSize);
+
+        // position += 4;
     }
 
     private async Task ReceiveLoop(ClientWebSocket client, CancellationToken token)
@@ -136,12 +215,19 @@ public class LogSenderWorker : BackgroundService
 
             if (result.EndOfMessage)
             {
-                uint queueIndex = BinaryPrimitives.ReadUInt32LittleEndian(
-                        receivingBuffer.AsSpan());
+                if (receivingBuffer[0] == (byte)MessageType.Heartbeat)
+                {
+                    uint queueIndex = BinaryPrimitives.ReadUInt32LittleEndian(
+                            receivingBuffer.AsSpan()[1..]);
 
-                Console.WriteLine($"receive heartbeat delete batches to index: {queueIndex}");
+                    Console.WriteLine($"Receive heartbeat. Delete batches to index: {queueIndex}");
 
-                buffer.DeleteSaved(queueIndex);
+                    buffer.DeleteSaved(queueIndex);
+                }
+                else
+                {
+                    _ = ConfigurationSendingAsync(client, token);
+                }
 
                 receivingBuffer.Length = 0;
             }
