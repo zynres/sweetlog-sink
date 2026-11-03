@@ -42,15 +42,16 @@ public class Sink : ILogEventSink
 
         Console.WriteLine("Start encoding emit");
 
-        Console.WriteLine(
-            @$"
+        Console.WriteLine($"""
+              Log.Data:                
                 Destination length: {logBuffer.Length},
                 position: {position},
                 prepared size: {preparedLog.Size}, 
                 batch capacity: {buffer.Batch.Capacity},
                 batch length: {buffer.Batch.Length},
                 TraceId: {preparedLog.TraceId?.ToHexString() ?? "null"},
-                SpanId: {preparedLog.SpanId?.ToHexString() ?? "null"}");
+                SpanId: {preparedLog.SpanId?.ToHexString() ?? "null"}
+            """);
 
         try
         {
