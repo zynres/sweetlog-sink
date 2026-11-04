@@ -9,7 +9,7 @@ using System.Net.WebSockets;
 
 namespace SweetLog.Serilog.Services.Workers;
 
-public class LogSenderWorker : BackgroundService
+public class DataSenderWorker : BackgroundService
 {
     private readonly SinkOptions options;
     private readonly BatchBuffer buffer;
@@ -21,7 +21,7 @@ public class LogSenderWorker : BackgroundService
     private UnsafeList<byte> receivingBuffer;
     private readonly Memory<byte> receivingMemory;
 
-    public LogSenderWorker(BatchBuffer buffer, SinkOptions options, ConfigurationSender configurationSender, HeartbeatSender heartbeatSender, LogSender logSender)
+    public DataSenderWorker(BatchBuffer buffer, SinkOptions options, ConfigurationSender configurationSender, HeartbeatSender heartbeatSender, LogSender logSender)
     {
         this.options = options;
         this.buffer = buffer;

@@ -21,7 +21,7 @@ public static class SinkExtension
         services.AddSingleton<LogEncoder>();
         services.AddSingleton<HeartbeatEncoder>();
         services.AddSingleton<ConfigurationEncoder>();
-        
+
         services.AddSingleton<ConfigurationSender>();
         services.AddSingleton<HeartbeatSender>();
         services.AddSingleton<LogSender>();
@@ -29,7 +29,7 @@ public static class SinkExtension
         services.AddSingleton<Sink>();
         services.AddSingleton<BatchBuffer>();
 
-        services.AddHostedService<LogSenderWorker>();
+        services.AddHostedService<DataSenderWorker>();
     }
 
     public static LoggerConfiguration SweetLog(this LoggerSinkConfiguration sinkConfiguration, IServiceProvider services)
