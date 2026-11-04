@@ -1,5 +1,5 @@
+using SweetLog.Serilog.Services.Encoders;
 using SweetLog.Serilog.Common.Data;
-using SweetLog.Serilog.Encoders;
 using SweetLog.Serilog.Buffer;
 using Serilog.Events;
 using Serilog.Core;

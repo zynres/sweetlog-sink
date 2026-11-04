@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
-using SweetLog.Serilog.Workers;
+using SweetLog.Serilog.Services.Encoders;
+using SweetLog.Serilog.Services.Workers;
+using SweetLog.Serilog.Services.Senders;
 using SweetLog.Serilog.Buffer;
 using Serilog.Configuration;
 using Serilog;
@@ -15,6 +17,15 @@ public static class SinkExtension
         configure?.Invoke(options);
 
         services.AddSingleton(options);
+
+        services.AddSingleton<LogEncoder>();
+        services.AddSingleton<HeartbeatEncoder>();
+        services.AddSingleton<ConfigurationEncoder>();
+        
+        services.AddSingleton<ConfigurationSender>();
+        services.AddSingleton<HeartbeatSender>();
+        services.AddSingleton<LogSender>();
+
         services.AddSingleton<Sink>();
         services.AddSingleton<BatchBuffer>();
 
