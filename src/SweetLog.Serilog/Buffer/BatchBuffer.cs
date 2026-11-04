@@ -1,9 +1,9 @@
 using SweetLib.Collections.Unsafe.Concurrent.Queue;
+using SweetLog.Serilog.Services.Encoders;
 using SweetLib.Collections.Unsafe.Array;
 using SweetLib.Collections.Unsafe.List;
 using SweetLog.Serilog.Common.Enums;
 using SweetLib.Collections.Unsafe;
-using SweetLog.Serilog.Encoders;
 using SweetLog.Serilog.Batching;
 using System.Buffers.Binary;
 
@@ -11,12 +11,9 @@ namespace SweetLog.Serilog.Buffer;
 
 public unsafe sealed class BatchBuffer : IDisposable
 {
-    private readonly HeartbeatEncoder heartEncoder;
     private readonly SinkOptions options;
 
     public UnsafeConcurrentQueue<UnsafeArray<byte>> Queue;
-
-    public UnsafeArray<byte> Heartbeat;
 
     public UnsafeList<byte> Batch;
     public LogBatch batchHeaders;
@@ -24,9 +21,6 @@ public unsafe sealed class BatchBuffer : IDisposable
     public BatchBuffer(SinkOptions options)
     {
         Queue = new UnsafeConcurrentQueue<UnsafeArray<byte>>(options.QueueCapacity);
-
-        heartEncoder = new HeartbeatEncoder();
-        Heartbeat = new UnsafeArray<byte>(1 + 8); // 1 messageType, 8 timestamp
 
         Batch = new UnsafeList<byte>(options.BatchSize);
         batchHeaders = new();
@@ -112,22 +106,7 @@ public unsafe sealed class BatchBuffer : IDisposable
         }
 
         return null;
-    }
-
-    public Memory<byte> BeatHeart()
-    {
-        var prepared = heartEncoder.GetPreparedHeartbeat();
-
-        int position = 0;
-
-        heartEncoder.Encode(in prepared, Heartbeat.AsSpan(), ref position);
-
-        unsafe
-        {
-            return new UnmanagedMemoryManager<byte>(
-                Heartbeat.Data, (int)Heartbeat.Length).Memory;
-        }
-    }
+    } 
 
     public void DeleteSaved(uint index)
     {
@@ -167,7 +146,6 @@ public unsafe sealed class BatchBuffer : IDisposable
 
     public void Dispose()
     {
-        Heartbeat.Dispose();
         Batch.Dispose();
 
         for (uint i = 0; i < Queue.Data->Length; i++)
